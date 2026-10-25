@@ -1,0 +1,53 @@
+{
+  "repository": "https://github.com/miqdadbadjuber/anti-slop",
+  "ref": "main",
+  "upstream_version": "3.2.22",
+  "retrieved_at": "2026-10-26",
+  "method": "Complete raw source retrieved through web browsing; terminal installer unavailable because DNS is blocked. Local content is frozen by SHA-256; no commit SHA was resolved.",
+  "files": [
+    {
+      "path": "skills/antislop-ui/SKILL.md",
+      "source": "https://raw.githubusercontent.com/miqdadbadjuber/anti-slop/main/skills/antislop-ui/SKILL.md",
+      "sha256": "ce9e6e5e59e845cfe213bd1a174c108cce107ef82f0e68f1307020dc49c6f867"
+    },
+    {
+      "path": "skills/antislop/SKILL.md",
+      "source": "https://raw.githubusercontent.com/miqdadbadjuber/anti-slop/main/skills/antislop/SKILL.md",
+      "sha256": "2b898d4c35c75ad2b0d7ffb105dc2704c871d66ccf4b7401b8827d39fd373f02",
+      "upstream_sha256": "fec3236bf9c805bd5832a8a6225c9eb72190604a8762428203191a8c25532de0",
+      "modification": "User-requested removal of standalone scripts; use the included contrast formula and reference table."
+    },
+    {
+      "path": "skills/antislop-human/SKILL.md",
+      "source": "https://raw.githubusercontent.com/miqdadbadjuber/anti-slop/main/skills/antislop-human/SKILL.md",
+      "sha256": "42e1f4bd16a7539fc6feb4b01539715c7bfce064cb27c62866f473a12ff0256d",
+      "upstream_sha256": "56589d198a350a67974653943cc73bdc1856ad37e1f97d5b97010460c91cf099",
+      "modification": "User-requested removal of standalone scripts; use the included contrast formula and reference table."
+    },
+    {
+      "path": "skills/antislop-layoutmobile/SKILL.md",
+      "source": "https://raw.githubusercontent.com/miqdadbadjuber/anti-slop/main/skills/antislop-layoutmobile/SKILL.md",
+      "sha256": "66c2558f92d94787819a682c7f466b689b70d0d913cf0e080d3c0968d2d8ce2d"
+    },
+    {
+      "path": "skills/antislop-copywriting/SKILL.md",
+      "source": "https://raw.githubusercontent.com/miqdadbadjuber/anti-slop/main/skills/antislop-copywriting/SKILL.md",
+      "sha256": "40a49d8dd7fcab8bb13a81e1958ba63ddcdd9819767dbb5b832bdb07a7d62f36"
+    },
+    {
+      "path": "skills/antislop-code/SKILL.md",
+      "source": "https://raw.githubusercontent.com/miqdadbadjuber/anti-slop/main/skills/antislop-code/SKILL.md",
+      "sha256": "b573e042f0c3337baffaaefd002aafdcb3c021bd55df6d3afbd81e88d954834d"
+    },
+    {
+      "path": "skills/antislop/LICENSE",
+      "source": "https://raw.githubusercontent.com/miqdadbadjuber/anti-slop/main/LICENSE",
+      "sha256": "ff3bc65703f65510701fc721240ba107fe0d3f5dd6e5ad74540467ab1b72db83"
+    },
+    {
+      "path": "skills/antislop/VERSION",
+      "source": "https://raw.githubusercontent.com/miqdadbadjuber/anti-slop/main/skills/antislop/VERSION",
+      "sha256": "57be1e9734e316a417f8bc3d157e06fd20e58ba73a17226195ede55406f475a5"
+    }
+  ]
+}

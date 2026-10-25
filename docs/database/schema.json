@@ -1,0 +1,4898 @@
+{
+  "model_version": "2026-10-26.2",
+  "status": "design_not_migration",
+  "naming": {
+    "table_case": "snake_case",
+    "column_case": "snake_case",
+    "primary_key_pattern": "singular_entity_name_id",
+    "application_schema": "public",
+    "column_style": "short_contextual_names_with_meaningful_identity_security_time_and_unit_suffixes"
+  },
+  "modules": [
+    {
+      "code": "identity-access",
+      "title": "Akun dan Akses"
+    },
+    {
+      "code": "content",
+      "title": "Kurikulum dan Konten"
+    },
+    {
+      "code": "learning",
+      "title": "Sesi dan Pembelajaran"
+    },
+    {
+      "code": "media-reports",
+      "title": "Media dan Laporan"
+    },
+    {
+      "code": "billing",
+      "title": "Paket dan Pembayaran"
+    },
+    {
+      "code": "operations",
+      "title": "AI, Audit, dan Operasional"
+    }
+  ],
+  "tables": [
+    {
+      "name": "users",
+      "entity_name": "user",
+      "primary_key": "user_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "Identitas orang dewasa; anak tidak mempunyai akun login sendiri.",
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "description": "Alamat yang dinormalisasi server untuk pencocokan/keunikan; input email tetap harus diverifikasi sesuai alur identitas."
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "pin_hash",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "roles",
+          "type": "text[]",
+          "nullable": false,
+          "introduced_in": "S04",
+          "description": "Peran global tetap editor/reviewer/operator; default array kosong, dinormalisasi sebagai himpunan. Bukan role owner/caregiver keluarga."
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (email)"
+      ],
+      "checks": [
+        "status IN ('active','disabled','deleting')",
+        "roles <@ ARRAY['editor','reviewer','operator']::text[]",
+        "array_position(roles, NULL) IS NULL",
+        "COALESCE(array_ndims(roles), 1) = 1",
+        "cardinality(roles) <= 3"
+      ],
+      "rules": [
+        "Email terverifikasi menjadi dasar penautan identitas melalui bukti server. PIN tersimpan sebagai hash password; tidak menyimpan PIN mentah.",
+        "Perubahan roles hanya lewat layanan admin berizin dengan lock user dan audit actor/before/after. Default kosong; owner keluarga tidak otomatis admin. Fase 1 tidak mempunyai katalog role dinamis atau expiry terpisah per role."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "identities",
+      "entity_name": "identity",
+      "primary_key": "identity_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "Identitas Google atau email yang telah dibuktikan.",
+      "columns": [
+        {
+          "name": "identity_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "provider_subject",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "email_verified_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (provider, provider_subject)"
+      ],
+      "checks": [],
+      "rules": [
+        "Subject provider adalah teks eksternal, bukan foreign key ke pengguna lain."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "families",
+      "entity_name": "family",
+      "primary_key": "family_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "Batas kepemilikan data satu keluarga.",
+      "columns": [
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [],
+      "rules": [
+        "Pembuatan keluarga dan membership owner berlangsung dalam satu transaksi; keluarga aktif harus mempunyai satu owner.",
+        "Baris keluarga menjadi titik lock saat mengatur kuota pengasuh/undangan."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "family_memberships",
+      "entity_name": "family_membership",
+      "primary_key": "family_membership_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "Hubungan pengguna dewasa dengan keluarga dan perannya.",
+      "columns": [
+        {
+          "name": "family_membership_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (family_id, user_id)",
+        "UNIQUE (family_id) WHERE role = 'owner' AND status = 'active'",
+        "UNIQUE (family_membership_id, family_id)"
+      ],
+      "checks": [
+        "role IN ('owner','caregiver')",
+        "status IN ('active', 'revoked')"
+      ],
+      "rules": [
+        "Index parsial membatasi paling banyak satu owner; transaksi layanan memastikan keluarga aktif tidak kehilangan owner."
+      ],
+      "indexes": [
+        "INDEX (user_id, status, family_id)"
+      ]
+    },
+    {
+      "name": "children",
+      "entity_name": "child",
+      "primary_key": "child_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "Profil belajar anak, berada dalam tepat satu keluarga.",
+      "columns": [
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "nickname",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "age_years",
+          "type": "smallint",
+          "nullable": false
+        },
+        {
+          "name": "avatar",
+          "type": "text",
+          "nullable": false,
+          "description": "Pilihan avatar dari katalog tetap, misalnya hopi. Nama field tetap avatar; bukan unggahan atau URL bebas."
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "data_version",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "selected_reward_grant_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "reward_grants.reward_grant_id",
+          "introduced_in": "M3"
+        },
+        {
+          "name": "preferences",
+          "type": "jsonb",
+          "nullable": false,
+          "introduced_in": "M3",
+          "description": "Preferensi dekorasi/aksesibilitas yang divalidasi; default objek JSON kosong, tanpa identitas relasional tersembunyi."
+        },
+        {
+          "name": "lease_generation",
+          "type": "bigint",
+          "nullable": false,
+          "introduced_in": "S05",
+          "description": "Counter generasi lease yang tidak direset ketika riwayat lama dibersihkan; default 0."
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id, family_id)"
+      ],
+      "checks": [
+        "age_years BETWEEN 4 AND 10",
+        "data_version >= 0",
+        "lease_generation >= 0"
+      ],
+      "rules": [
+        "Titik acuan usia bukan tingkat kemampuan. Penghapusan profil mengikuti D2/D7 dan tidak mendaur ulang child_id.",
+        "Personalisasi adalah atribut profil satu-ke-satu, bukan tabel terpisah. FK komposit selected_reward_grant_id/child_id menjaga dekorasi milik anak; API hanya mengizinkan field preferensi yang didukung, bukan mengubah progres atau hak paket.",
+        "data_version dinaikkan secara atomik pada perubahan profil/bukti/portofolio yang memengaruhi isi atau validitas laporan. Perubahan lease_generation saja tidak mengubah data_version. Penghapusan bukti dan invalidasi snapshot/ekspor terkait memakai lock child yang sama dengan publikasi hasil laporan."
+      ],
+      "indexes": [
+        "INDEX (family_id, status)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "selected_reward_grant_id",
+            "child_id"
+          ],
+          "references_table": "reward_grants",
+          "references_columns": [
+            "reward_grant_id",
+            "child_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "family_invitations",
+      "entity_name": "family_invitation",
+      "primary_key": "family_invitation_id",
+      "module": "identity-access",
+      "phase": "M3",
+      "purpose": "Undangan pengasuh dengan token sekali pakai.",
+      "columns": [
+        {
+          "name": "family_invitation_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "invited_by_user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "accepted_by_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "description": "Alamat yang dinormalisasi server untuk pencocokan/keunikan; input email tetap harus diverifikasi sesuai alur identitas."
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "accepted_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (token_hash)",
+        "UNIQUE (family_id, email) WHERE status = 'pending'",
+        "UNIQUE (family_invitation_id, family_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "Pending dan membership caregiver aktif bersama-sama memakai dua slot. Status undangan yang kedaluwarsa diperbarui di dalam transaksi kuota; jangan memakai now() sebagai predicate index parsial."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "child_permissions",
+      "entity_name": "child_permission",
+      "primary_key": "child_permission_id",
+      "module": "identity-access",
+      "phase": "M3",
+      "purpose": "Izin per anak: ditawarkan lewat undangan atau efektif lewat membership.",
+      "columns": [
+        {
+          "name": "child_permission_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "family_membership_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "family_memberships.family_membership_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "can_learn",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "name": "can_view_reports",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "name": "can_view_portfolio",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "name": "can_export_reports",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "family_invitation_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "family_invitations.family_invitation_id"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (family_membership_id, child_id) WHERE family_membership_id IS NOT NULL",
+        "UNIQUE (family_invitation_id, child_id) WHERE family_invitation_id IS NOT NULL"
+      ],
+      "checks": [
+        "num_nonnulls(family_membership_id, family_invitation_id) = 1"
+      ],
+      "rules": [
+        "Tepat satu pemilik: family_invitation_id untuk penawaran, atau family_membership_id untuk izin efektif. FK komposit memeriksa anak/pemilik pada keluarga yang sama. Row undangan tidak pernah memberi akses efektif.",
+        "Penerimaan undangan mengunci keluarga dan memindahkan/upsert izin ke membership secara atomik. Jika membership lama diaktifkan kembali, cabut izin lama yang tidak ditawarkan, upsert izin tawaran, lalu hapus row penawaran dan audit penerimaan; tidak menggabungkan hak lama diam-diam.",
+        "Izin awal belajar/laporan true, portofolio/ekspor false. Owner memakai membership, tidak perlu row caregiver. Semua operasi memeriksa membership dan revoked_at terbaru."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "family_membership_id",
+            "family_id"
+          ],
+          "references_table": "family_memberships",
+          "references_columns": [
+            "family_membership_id",
+            "family_id"
+          ]
+        },
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        },
+        {
+          "columns": [
+            "family_invitation_id",
+            "family_id"
+          ],
+          "references_table": "family_invitations",
+          "references_columns": [
+            "family_invitation_id",
+            "family_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "auth_sessions",
+      "entity_name": "auth_session",
+      "primary_key": "auth_session_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "Sesi login satu browser milik orang dewasa.",
+      "columns": [
+        {
+          "name": "auth_session_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "families.family_id"
+        },
+        {
+          "name": "active_child_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "children.child_id"
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "mode",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "adult_unlocked_until",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (token_hash)"
+      ],
+      "checks": [
+        "mode IN ('adult','child')",
+        "mode <> 'child' OR (family_id IS NOT NULL AND active_child_id IS NOT NULL)"
+      ],
+      "rules": [
+        "Jika active_child_id terisi, FK komposit memastikan anak di family_id yang dipilih. Login baru tidak mencabut sesi browser lain.",
+        "Seluruh tab dengan auth_session yang sama berbagi mode dan active_child_id. Start/resume/transfer memeriksa ulang mode/PIN dan lease milik browser di bawah lock auth_session; bila ada lease anak lain, wajib pause eksplisit lebih dahulu. Gagal/konflik tidak mengubah cookie/konteks atau sesi anak lain."
+      ],
+      "indexes": [
+        "INDEX (user_id, revoked_at, expires_at)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "active_child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "login_tokens",
+      "entity_name": "login_token",
+      "primary_key": "login_token_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "Tautan email login/reset PIN dengan purpose dan masa berlaku.",
+      "columns": [
+        {
+          "name": "login_token_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "description": "Alamat yang dinormalisasi server untuk pencocokan/keunikan; input email tetap harus diverifikasi sesuai alur identitas."
+        },
+        {
+          "name": "purpose",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "consumed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (token_hash)"
+      ],
+      "checks": [],
+      "rules": [
+        "Konsumsi atomik sekali pakai. Secret mentah tidak disimpan pada tabel, log atau argumen queue; pengiriman asinkron memakai payload sementara terenkripsi pada processing_tasks sesuai protokol email."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "oauth_login_states",
+      "entity_name": "oauth_login_state",
+      "primary_key": "oauth_login_state_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "State/nonce sementara untuk callback OAuth/OIDC.",
+      "columns": [
+        {
+          "name": "oauth_login_state_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "state_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "nonce_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "pkce_verifier_encrypted",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "return_path",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "consumed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (state_hash)"
+      ],
+      "checks": [],
+      "rules": [
+        "Return path dibatasi daftar route lokal. Kunci dekripsi PKCE hanya berada di server."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "consent_events",
+      "entity_name": "consent_event",
+      "primary_key": "consent_event_id",
+      "module": "identity-access",
+      "phase": "S03",
+      "purpose": "Jejak pemberian/penarikan persetujuan per fitur dan versi kebijakan.",
+      "columns": [
+        {
+          "name": "consent_event_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "policy_version",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "sequence",
+          "type": "bigint",
+          "nullable": false,
+          "description": "Urutan server per anak/jenis persetujuan; dialokasikan di bawah lock anak."
+        },
+        {
+          "name": "action",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "occurred_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id, kind, sequence)"
+      ],
+      "checks": [
+        "action IN ('grant','withdraw')",
+        "sequence > 0"
+      ],
+      "rules": [
+        "Append-only selama retensi yang disepakati. Status efektif memakai sequence terbesar per anak/kind, dialokasikan di bawah lock anak; bukan timestamp klien atau urutan acak UUID. Grant lama tidak menggantikan pemeriksaan pencabutan.",
+        "Pembacaan status efektif memakai UNIQUE (child_id, kind, sequence) sebagai indeks pencarian; tidak menambahkan indeks urutan timestamp yang tidak dipakai untuk menentukan persetujuan terbaru."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "courses",
+      "entity_name": "course",
+      "primary_key": "course_id",
+      "module": "content",
+      "phase": "S02",
+      "purpose": "Mata pelajaran; Fase 1 berisi math.",
+      "columns": [
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (code)"
+      ],
+      "checks": [],
+      "rules": [],
+      "indexes": []
+    },
+    {
+      "name": "chapters",
+      "entity_name": "chapter",
+      "primary_key": "chapter_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Bab dalam suatu kursus.",
+      "columns": [
+        {
+          "name": "chapter_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (course_id, code)",
+        "UNIQUE (chapter_id, course_id)"
+      ],
+      "checks": [],
+      "rules": [],
+      "indexes": []
+    },
+    {
+      "name": "levels",
+      "entity_name": "level",
+      "primary_key": "level_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Tingkat dalam satu bab.",
+      "columns": [
+        {
+          "name": "level_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "chapter_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "chapters.chapter_id"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (chapter_id, code)",
+        "UNIQUE (level_id, course_id)",
+        "UNIQUE (level_id, chapter_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "FK komposit chapter_id/course_id memastikan bab berada di kursus yang sama."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "chapter_id",
+            "course_id"
+          ],
+          "references_table": "chapters",
+          "references_columns": [
+            "chapter_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "skills",
+      "entity_name": "skill",
+      "primary_key": "skill_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Target keterampilan matematika yang stabil.",
+      "columns": [
+        {
+          "name": "skill_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (course_id, code)",
+        "UNIQUE (skill_id, course_id)"
+      ],
+      "checks": [],
+      "rules": [],
+      "indexes": []
+    },
+    {
+      "name": "level_skills",
+      "entity_name": "level_skill",
+      "primary_key": "level_skill_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Relasi tingkat dengan keterampilan; satu keterampilan dapat dilatih pada beberapa tingkat.",
+      "columns": [
+        {
+          "name": "level_skill_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "level_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "levels.level_id"
+        },
+        {
+          "name": "skill_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "skills.skill_id"
+        },
+        {
+          "name": "is_required",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (level_id, skill_id)",
+        "UNIQUE (level_skill_id, course_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "FK komposit level/course dan skill/course mencegah keterampilan lintas kursus yang salah."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "level_id",
+            "course_id"
+          ],
+          "references_table": "levels",
+          "references_columns": [
+            "level_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "skill_id",
+            "course_id"
+          ],
+          "references_table": "skills",
+          "references_columns": [
+            "skill_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "level_prerequisites",
+      "entity_name": "level_prerequisite",
+      "primary_key": "level_prerequisite_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Tingkat prasyarat, termasuk antar bab dalam satu kursus.",
+      "columns": [
+        {
+          "name": "level_prerequisite_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "level_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "levels.level_id"
+        },
+        {
+          "name": "required_level_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "levels.level_id"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (level_id, required_level_id)"
+      ],
+      "checks": [
+        "level_id <> required_level_id"
+      ],
+      "rules": [
+        "Kedua tingkat harus satu kursus. Layanan memeriksa graf tanpa siklus di bawah lock konten kursus; CHECK tidak memeriksa siklus lintas baris."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "level_id",
+            "course_id"
+          ],
+          "references_table": "levels",
+          "references_columns": [
+            "level_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "required_level_id",
+            "course_id"
+          ],
+          "references_table": "levels",
+          "references_columns": [
+            "level_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "rule_versions",
+      "entity_name": "rule_version",
+      "primary_key": "rule_version_id",
+      "module": "content",
+      "phase": "S05",
+      "purpose": "Konfigurasi aturan penempatan, mastery, atau ringkasan laporan yang dibekukan.",
+      "columns": [
+        {
+          "name": "rule_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "parameters",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (kind, version)"
+      ],
+      "checks": [
+        "kind IN ('placement', 'mastery', 'reporting')"
+      ],
+      "rules": [
+        "Contoh version: placement-v0.1, mastery-v0.1. Parameter JSON tidak menyimpan FK/domain identity. Versi yang dirujuk tidak diubah; versi baru melalui evaluasi.",
+        "Layanan memeriksa kind sesuai peran FK: placement, mastery, atau reporting; keberadaan UUID aturan saja tidak memverifikasi jenis aturan."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "rubric_versions",
+      "entity_name": "rubric_version",
+      "primary_key": "rubric_version_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Rubrik objektif/observasi berversi.",
+      "columns": [
+        {
+          "name": "rubric_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "criteria",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (course_id, code, version)",
+        "UNIQUE (rubric_version_id, course_id)"
+      ],
+      "checks": [
+        "version > 0"
+      ],
+      "rules": [
+        "Rubrik yang dirujuk versi konten immutable."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "activity_templates",
+      "entity_name": "activity_template",
+      "primary_key": "activity_template_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Versi renderer/generator dan schema parameter suatu templat.",
+      "columns": [
+        {
+          "name": "activity_template_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "interaction_kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "parameter_schema",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "generator_version",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (code, version)"
+      ],
+      "checks": [
+        "version > 0"
+      ],
+      "rules": [
+        "Templat yang dirujuk konten terbit immutable; perubahan renderer/generator direkam sebagai versi baru."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "product_assets",
+      "entity_name": "product_asset",
+      "primary_key": "product_asset_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Aset produk orisinal/berizin; terpisah dari media pribadi anak.",
+      "columns": [
+        {
+          "name": "product_asset_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "locale",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "storage_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "delivery_policy",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "checksum",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "license_note",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (code, locale, version)"
+      ],
+      "checks": [
+        "version > 0"
+      ],
+      "rules": [
+        "Gambar/audio/video produk dapat publik sesuai kebijakan; PDF worksheet/kunci melewati endpoint hak fitur dan tidak memakai URL publik permanen.",
+        "Versi aset yang dirujuk konten direview/terbit bersifat immutable, termasuk storage_key, checksum, lisensi dan kebijakan delivery. Objek storage tidak ditimpa pada key/versi yang sama; perubahan byte atau metadata yang memengaruhi review membuat versi aset baru."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "activity_versions",
+      "entity_name": "activity_version",
+      "primary_key": "activity_version_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Konten, parameter, kunci server dan rubrik pada suatu revisi/versi.",
+      "columns": [
+        {
+          "name": "activity_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "level_skill_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "level_skills.level_skill_id"
+        },
+        {
+          "name": "activity_template_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "activity_templates.activity_template_id"
+        },
+        {
+          "name": "rubric_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rubric_versions.rubric_version_id"
+        },
+        {
+          "name": "content_generation_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "content_generations.content_generation_id",
+          "introduced_in": "M3"
+        },
+        {
+          "name": "locale",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "revision",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "instruction",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "content",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "grading_config",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "content_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "published_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (course_id, code, locale, version)",
+        "UNIQUE (activity_version_id, level_skill_id)",
+        "UNIQUE (activity_version_id, rubric_version_id)"
+      ],
+      "checks": [
+        "version > 0",
+        "revision > 0",
+        "status IN ('draft', 'in_review', 'published', 'archived')",
+        "kind IN ('core','supporting','olympiad')"
+      ],
+      "rules": [
+        "FK komposit memeriksa level_skill dan rubric pada course yang sama. Content publik dan grading_config privat dipisahkan; kind/target/locale/code termasuk definisi yang direview.",
+        "Published/archived mempertahankan isi immutable; draf boleh direvisi dengan revision dan hash baru yang membatalkan review sebelumnya.",
+        "content_hash mencakup definisi efektif yang dinormalisasi: teks/payload/locale, konfigurasi penilaian, serta versi templat/rubrik/aset yang digunakan beserta checksum. Binding aset dan referensi video/PDF/kunci termasuk isi yang direview. Perubahan dependensi draf mengunci induk, menaikkan revision, menghitung hash baru dan membatalkan review; dependensi versi terbit tidak diubah.",
+        "Identitas seri konten adalah (course_id, code); locale/version membedakan edisi. Seluruh FK belajar merujuk activity_version_id yang immutable, bukan identitas aktivitas terpisah."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "level_skill_id",
+            "course_id"
+          ],
+          "references_table": "level_skills",
+          "references_columns": [
+            "level_skill_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "rubric_version_id",
+            "course_id"
+          ],
+          "references_table": "rubric_versions",
+          "references_columns": [
+            "rubric_version_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "activity_version_assets",
+      "entity_name": "activity_version_asset",
+      "primary_key": "activity_version_asset_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Aset produk yang dirujuk versi aktivitas.",
+      "columns": [
+        {
+          "name": "activity_version_asset_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "activity_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "activity_versions.activity_version_id"
+        },
+        {
+          "name": "product_asset_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "product_assets.product_asset_id"
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (activity_version_id, role, position)"
+      ],
+      "checks": [],
+      "rules": [
+        "Insert/update/delete binding melalui layanan revisi induk di bawah lock induk; perubahan menaikkan revision/hash dan menggugurkan review. Binding versi published/archived tidak dapat diubah; buat versi induk baru."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "chapter_introductions",
+      "entity_name": "chapter_introduction",
+      "primary_key": "chapter_introduction_id",
+      "module": "content",
+      "phase": "M5",
+      "purpose": "Versi pengantar bab interaktif/video opsional.",
+      "columns": [
+        {
+          "name": "chapter_introduction_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "chapter_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "chapters.chapter_id"
+        },
+        {
+          "name": "video_product_asset_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "product_assets.product_asset_id"
+        },
+        {
+          "name": "locale",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "revision",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "slides",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "content_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (chapter_id, locale, version)"
+      ],
+      "checks": [
+        "status IN ('draft', 'in_review', 'published', 'archived')",
+        "version > 0",
+        "revision > 0"
+      ],
+      "rules": [
+        "Slides menyimpan struktur/teks dan key role/urutan lokal; identitas aset memakai chapter_introduction_assets. Versi/revisi/hash dan review target tetap wajib.",
+        "content_hash mencakup definisi efektif yang dinormalisasi: teks/payload/locale, konfigurasi penilaian, serta versi templat/rubrik/aset yang digunakan beserta checksum. Binding aset dan referensi video/PDF/kunci termasuk isi yang direview. Perubahan dependensi draf mengunci induk, menaikkan revision, menghitung hash baru dan membatalkan review; dependensi versi terbit tidak diubah."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "chapter_introduction_assets",
+      "entity_name": "chapter_introduction_asset",
+      "primary_key": "chapter_introduction_asset_id",
+      "module": "content",
+      "phase": "M5",
+      "purpose": "Aset produk yang dirujuk layar pengantar bab.",
+      "columns": [
+        {
+          "name": "chapter_introduction_asset_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "chapter_introduction_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "chapter_introductions.chapter_introduction_id"
+        },
+        {
+          "name": "product_asset_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "product_assets.product_asset_id"
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (chapter_introduction_id, role, position)"
+      ],
+      "checks": [],
+      "rules": [
+        "slides pada pengantar hanya memakai role/position lokal; identitas asset tersimpan pada relasi ini.",
+        "Insert/update/delete binding melalui layanan revisi induk di bawah lock induk; perubahan menaikkan revision/hash dan menggugurkan review. Binding versi published/archived tidak dapat diubah; buat versi induk baru."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "worksheet_versions",
+      "entity_name": "worksheet_version",
+      "primary_key": "worksheet_version_id",
+      "module": "content",
+      "phase": "M4",
+      "purpose": "Versi PDF worksheet dan kunci orang tua.",
+      "columns": [
+        {
+          "name": "worksheet_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "level_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "levels.level_id"
+        },
+        {
+          "name": "worksheet_product_asset_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "product_assets.product_asset_id"
+        },
+        {
+          "name": "answer_key_product_asset_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "product_assets.product_asset_id"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "locale",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "revision",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "content_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (level_id, code, locale, version)"
+      ],
+      "checks": [
+        "status IN ('draft', 'in_review', 'published', 'archived')",
+        "version > 0",
+        "revision > 0"
+      ],
+      "rules": [
+        "content_hash mencakup definisi efektif yang dinormalisasi: teks/payload/locale, konfigurasi penilaian, serta versi templat/rubrik/aset yang digunakan beserta checksum. Binding aset dan referensi video/PDF/kunci termasuk isi yang direview. Perubahan dependensi draf mengunci induk, menaikkan revision, menghitung hash baru dan membatalkan review; dependensi versi terbit tidak diubah."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "content_reviews",
+      "entity_name": "content_review",
+      "primary_key": "content_review_id",
+      "module": "content",
+      "phase": "S04",
+      "purpose": "Persetujuan/penolakan manusia terhadap tepat satu target konten.",
+      "columns": [
+        {
+          "name": "content_review_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "activity_version_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "activity_versions.activity_version_id"
+        },
+        {
+          "name": "chapter_introduction_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "chapter_introductions.chapter_introduction_id",
+          "introduced_in": "M5"
+        },
+        {
+          "name": "worksheet_version_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "worksheet_versions.worksheet_version_id",
+          "introduced_in": "M4"
+        },
+        {
+          "name": "reviewer_user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "revision",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "content_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "decision",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [
+        "num_nonnulls(activity_version_id, chapter_introduction_id, worksheet_version_id) = 1",
+        "decision IN ('approved','changes_requested','rejected')",
+        "revision > 0"
+      ],
+      "rules": [
+        "Tiga target adalah FK nyata dengan CHECK tepat satu, bukan target_type/target_id tanpa integritas. Publish memeriksa review target/revisi/hash yang sama dan peran peninjau di bawah lock.",
+        "Penyimpanan review dan layanan publish tersedia S04 sebelum uji keluarga S08; UI editorial lengkap masuk S09. Seed lokal sintetis tidak menjadi bukti persetujuan pendidik untuk konten uji keluarga."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "placement_runs",
+      "entity_name": "placement_run",
+      "primary_key": "placement_run_id",
+      "module": "learning",
+      "phase": "S05",
+      "purpose": "Satu run tes penempatan yang bisa melintasi beberapa sesi belajar.",
+      "columns": [
+        {
+          "name": "placement_run_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "placement_rule_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rule_versions.rule_version_id"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "age_years",
+          "type": "smallint",
+          "nullable": false
+        },
+        {
+          "name": "completed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id, course_id) WHERE status = 'in_progress'",
+        "UNIQUE (placement_run_id, child_id, course_id)"
+      ],
+      "checks": [
+        "status IN ('in_progress', 'completed', 'superseded')"
+      ],
+      "rules": [
+        "Run berbeda dari study_session. Tes ulang supersede run lama; berhenti sebagian tetap menyimpan probe dan bukti."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "placement_probes",
+      "entity_name": "placement_probe",
+      "primary_key": "placement_probe_id",
+      "module": "learning",
+      "phase": "S05",
+      "purpose": "Probe suatu tingkat pada run penempatan.",
+      "columns": [
+        {
+          "name": "placement_probe_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "placement_run_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "placement_runs.placement_run_id"
+        },
+        {
+          "name": "level_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "levels.level_id"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "outcome",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (placement_run_id, level_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "Kursus tingkat sama dengan run. Respons valid/count berasal dari instans/attempt; skip/teknis tidak menjadi salah."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "study_sessions",
+      "entity_name": "study_session",
+      "primary_key": "study_session_id",
+      "module": "learning",
+      "phase": "S05",
+      "purpose": "Sesi anak dengan purpose, posisi, dan rencana yang dapat dilanjutkan.",
+      "columns": [
+        {
+          "name": "study_session_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "started_by_user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "placement_run_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "placement_runs.placement_run_id"
+        },
+        {
+          "name": "mastery_rule_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rule_versions.rule_version_id"
+        },
+        {
+          "name": "purpose",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "plan_snapshot",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "last_interacted_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "completed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id) WHERE status IN ('active','paused')",
+        "UNIQUE (study_session_id, child_id, course_id)",
+        "UNIQUE (study_session_id, child_id)"
+      ],
+      "checks": [
+        "purpose IN ('placement','practice','olympiad')",
+        "(purpose = 'placement') = (placement_run_id IS NOT NULL)",
+        "status IN ('active', 'paused', 'completed', 'ended')"
+      ],
+      "rules": [
+        "FK komposit memeriksa child/family dan placement_run/child/course. Latihan membekukan rencana; penempatan membekukan aturan dan probe yang telah disajikan, bukan memprediksi jawaban probe berikutnya."
+      ],
+      "indexes": [
+        "INDEX (child_id, course_id, created_at)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        },
+        {
+          "columns": [
+            "placement_run_id",
+            "child_id",
+            "course_id"
+          ],
+          "references_table": "placement_runs",
+          "references_columns": [
+            "placement_run_id",
+            "child_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "learning_leases",
+      "entity_name": "learning_lease",
+      "primary_key": "learning_lease_id",
+      "module": "learning",
+      "phase": "S05",
+      "purpose": "Riwayat pemberian lease perangkat; paling banyak satu aktif per anak.",
+      "columns": [
+        {
+          "name": "learning_lease_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "study_session_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "study_sessions.study_session_id"
+        },
+        {
+          "name": "auth_session_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "auth_sessions.auth_session_id"
+        },
+        {
+          "name": "generation",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "revocation_reason",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id, generation)",
+        "UNIQUE (token_hash)",
+        "UNIQUE (child_id) WHERE revoked_at IS NULL",
+        "UNIQUE (auth_session_id) WHERE revoked_at IS NULL"
+      ],
+      "checks": [
+        "generation > 0",
+        "(revoked_at IS NULL) = (revocation_reason IS NULL)"
+      ],
+      "rules": [
+        "FK komposit study_session_id/child_id mengikat lease ke sesi anak. Rotasi menutup baris lama dan menambah baris baru di bawah lock child; riwayat hash mendukung recovery terminal dan audit.",
+        "Generasi baru dialokasikan dengan menaikkan children.lease_generation secara atomik di bawah lock anak; tidak menghitung ulang dari MAX riwayat yang dapat dibersihkan. Rotasi secret recovery pada lease yang sama tidak menaikkan generasi.",
+        "Satu auth_session hanya mempunyai satu lease aktif. Mutasi dari browser mengunci auth_sessions penerima lebih dahulu, lalu child, study_session/lease, dan instans. Transfer tidak mengubah/mengunci auth_sessions pemilik lama setelah child dikunci; perangkat lama mengetahui revocation pada request berikutnya."
+      ],
+      "indexes": [
+        "INDEX (study_session_id, generation)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "study_session_id",
+            "child_id"
+          ],
+          "references_table": "study_sessions",
+          "references_columns": [
+            "study_session_id",
+            "child_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "responses",
+      "entity_name": "response",
+      "primary_key": "response_id",
+      "module": "learning",
+      "phase": "S06",
+      "purpose": "Respons berurutan; koreksi tidak menimpa respons pertama.",
+      "columns": [
+        {
+          "name": "response_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "attempt_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "attempts.attempt_id"
+        },
+        {
+          "name": "sequence",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "answer",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "answer_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "is_correct",
+          "type": "boolean",
+          "nullable": true
+        },
+        {
+          "name": "submitted_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (attempt_id, sequence)",
+        "UNIQUE (response_id, attempt_id)"
+      ],
+      "checks": [
+        "sequence > 0"
+      ],
+      "rules": [
+        "Urutan diperiksa saat transaksi instans dikunci. Payload dibatasi schema respons; tidak memuat skor/klaim kebenaran tepercaya dari klien.",
+        "sequence 1 adalah jawaban pertama. Setelah respons ini disimpan, first_response_id pada attempt tidak boleh berpindah ke sequence berikutnya. Jawaban koreksi memakai sequence baru; retry sequence yang sama memverifikasi answer_hash."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "attempts",
+      "entity_name": "attempt",
+      "primary_key": "attempt_id",
+      "module": "learning",
+      "phase": "S05",
+      "purpose": "Satu penyajian soal dan hasil logisnya; banyak respons koreksi tetap satu attempt.",
+      "columns": [
+        {
+          "name": "attempt_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "study_session_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "study_sessions.study_session_id"
+        },
+        {
+          "name": "activity_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "activity_versions.activity_version_id"
+        },
+        {
+          "name": "level_skill_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "level_skills.level_skill_id"
+        },
+        {
+          "name": "rubric_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rubric_versions.rubric_version_id"
+        },
+        {
+          "name": "placement_probe_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "placement_probes.placement_probe_id"
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "seed",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "parameters",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "grading_snapshot",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "fingerprint",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "evidence_kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "presented_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "completed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "first_response_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "responses.response_id",
+          "introduced_in": "S06"
+        },
+        {
+          "name": "first_response_correct",
+          "type": "boolean",
+          "nullable": true,
+          "introduced_in": "S06"
+        },
+        {
+          "name": "independent_correct",
+          "type": "boolean",
+          "nullable": true,
+          "introduced_in": "S06"
+        },
+        {
+          "name": "hint_count",
+          "type": "integer",
+          "nullable": false,
+          "introduced_in": "S06"
+        },
+        {
+          "name": "was_assisted",
+          "type": "boolean",
+          "nullable": false,
+          "introduced_in": "S06"
+        },
+        {
+          "name": "evaluated_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "introduced_in": "S06"
+        },
+        {
+          "name": "evaluation_status",
+          "type": "text",
+          "nullable": false,
+          "introduced_in": "S06",
+          "description": "pending/evaluated/not_applicable/failed; terpisah dari status penyelesaian soal. Default pending."
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (study_session_id, position)",
+        "UNIQUE (attempt_id, study_session_id)",
+        "UNIQUE (attempt_id, child_id, course_id)"
+      ],
+      "checks": [
+        "position > 0",
+        "status IN ('presented', 'in_progress', 'completed', 'skipped', 'technical_failure')",
+        "hint_count >= 0",
+        "evaluation_status IN ('pending','evaluated','not_applicable','failed')"
+      ],
+      "rules": [
+        "FK komposit memeriksa pasangan activity_version/level_skill dan activity_version/rubric. Probe bila terisi harus milik run pada sesi; pemeriksaan ini dilakukan layanan/trigger constraint.",
+        "Public render DTO tidak membawa grading_snapshot. Instans yang telah disajikan tidak diganti saat reload/hasil AI terlambat.",
+        "FK komposit first_response_id/attempt_id menjaga respons pertama milik attempt. FK komposit study_session_id/child_id/course_id serta child_id/family_id menjaga konteks keluarga/kursus.",
+        "Mastery hanya memakai instans terminal objektif yang evaluated; pending/skip/teknis/karya terbuka dikecualikan sesuai rubrik.",
+        "Attempt dibuat S05 saat soal disiapkan. S06 menambahkan respons/hasil; first_response merujuk respons sequence 1 pada attempt yang sama dan tidak ditimpa. Completed menyatakan aktivitas selesai; hasil benar/salah hanya tersedia setelah evaluation_status evaluated. Lewat/teknis/karya terbuka/pending tidak menjadi bukti objektif mastery."
+      ],
+      "indexes": [
+        "INDEX (child_id, course_id, evaluated_at)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "activity_version_id",
+            "level_skill_id"
+          ],
+          "references_table": "activity_versions",
+          "references_columns": [
+            "activity_version_id",
+            "level_skill_id"
+          ]
+        },
+        {
+          "columns": [
+            "activity_version_id",
+            "rubric_version_id"
+          ],
+          "references_table": "activity_versions",
+          "references_columns": [
+            "activity_version_id",
+            "rubric_version_id"
+          ]
+        },
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        },
+        {
+          "columns": [
+            "first_response_id",
+            "attempt_id"
+          ],
+          "references_table": "responses",
+          "references_columns": [
+            "response_id",
+            "attempt_id"
+          ]
+        },
+        {
+          "columns": [
+            "study_session_id",
+            "child_id",
+            "course_id"
+          ],
+          "references_table": "study_sessions",
+          "references_columns": [
+            "study_session_id",
+            "child_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "study_session_events",
+      "entity_name": "study_session_event",
+      "primary_key": "study_session_event_id",
+      "module": "learning",
+      "phase": "S06",
+      "purpose": "Interaksi, hint, bantuan, pause, atau skip yang relevan pada sesi.",
+      "columns": [
+        {
+          "name": "study_session_event_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "study_session_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "study_sessions.study_session_id"
+        },
+        {
+          "name": "attempt_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "attempts.attempt_id"
+        },
+        {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "data",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "occurred_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [],
+      "rules": [
+        "FK komposit instans/sesi bila ada. Client mengirim study_session_event_id untuk deduplikasi; server memvalidasi konteks dan kind. Polling bukan interaksi belajar."
+      ],
+      "indexes": [
+        "INDEX (study_session_id, occurred_at)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "attempt_id",
+            "study_session_id"
+          ],
+          "references_table": "attempts",
+          "references_columns": [
+            "attempt_id",
+            "study_session_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mastery_states",
+      "entity_name": "mastery_state",
+      "primary_key": "mastery_state_id",
+      "module": "learning",
+      "phase": "S07",
+      "purpose": "Status penguasaan anak pada keterampilan-tingkat dan versi aturan.",
+      "columns": [
+        {
+          "name": "mastery_state_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "level_skill_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "level_skills.level_skill_id"
+        },
+        {
+          "name": "mastery_rule_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rule_versions.rule_version_id"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "rubric_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rubric_versions.rubric_version_id"
+        },
+        {
+          "name": "first_mastered_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id, level_skill_id, mastery_rule_version_id, rubric_version_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "Kursus level_skill sama dengan course_id. Jendela bukti diquery dari attempts; tidak menyimpan array ID bukti sebagai satu-satunya relasi.",
+        "Jendela bukti dan state dipisahkan juga per rubric_version_id. Pencapaian versi lama tetap historis; rubrik baru tidak mewarisi status penguasaan tanpa evaluasi/migrasi yang disetujui."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "level_skill_id",
+            "course_id"
+          ],
+          "references_table": "level_skills",
+          "references_columns": [
+            "level_skill_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "rubric_version_id",
+            "course_id"
+          ],
+          "references_table": "rubric_versions",
+          "references_columns": [
+            "rubric_version_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mastery_changes",
+      "entity_name": "mastery_change",
+      "primary_key": "mastery_change_id",
+      "module": "learning",
+      "phase": "S07",
+      "purpose": "Keputusan perubahan titik latihan dengan alasan dan bukti.",
+      "columns": [
+        {
+          "name": "mastery_change_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "from_level_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "levels.level_id"
+        },
+        {
+          "name": "to_level_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "levels.level_id"
+        },
+        {
+          "name": "rule_version_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "rule_versions.rule_version_id"
+        },
+        {
+          "name": "study_session_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "study_sessions.study_session_id"
+        },
+        {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": false,
+          "description": "Identifier alasan domain sesuai kontrak endpoint; penamaan singkat tidak mengubah aturan validasi nilainya."
+        },
+        {
+          "name": "decision_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "effective_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id, decision_key)",
+        "UNIQUE (mastery_change_id, child_id, course_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "Source session bila ada harus anak/kursus yang sama. Parent override memiliki actor dan alasan, tetapi tidak menciptakan bukti mastery.",
+        "Target prasyarat boleh pada bab lain dalam kursus yang sama; perbarui chapter_progress bab target, jangan memasang level pada bab yang salah."
+      ],
+      "indexes": [
+        "INDEX (child_id, course_id, created_at)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "from_level_id",
+            "course_id"
+          ],
+          "references_table": "levels",
+          "references_columns": [
+            "level_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "to_level_id",
+            "course_id"
+          ],
+          "references_table": "levels",
+          "references_columns": [
+            "level_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "study_session_id",
+            "child_id",
+            "course_id"
+          ],
+          "references_table": "study_sessions",
+          "references_columns": [
+            "study_session_id",
+            "child_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mastery_change_evidence",
+      "entity_name": "mastery_change_evidence",
+      "primary_key": "mastery_change_evidence_id",
+      "module": "learning",
+      "phase": "S07",
+      "purpose": "Bukti relasional untuk satu perubahan tingkat.",
+      "columns": [
+        {
+          "name": "mastery_change_evidence_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "mastery_change_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "mastery_changes.mastery_change_id"
+        },
+        {
+          "name": "attempt_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "attempts.attempt_id"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (mastery_change_id, attempt_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "FK komposit ke change dan attempt memakai child_id/course_id yang sama."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "mastery_change_id",
+            "child_id",
+            "course_id"
+          ],
+          "references_table": "mastery_changes",
+          "references_columns": [
+            "mastery_change_id",
+            "child_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "attempt_id",
+            "child_id",
+            "course_id"
+          ],
+          "references_table": "attempts",
+          "references_columns": [
+            "attempt_id",
+            "child_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chapter_progress",
+      "entity_name": "chapter_progress",
+      "primary_key": "chapter_progress_id",
+      "module": "learning",
+      "phase": "S07",
+      "purpose": "Posisi latihan bab dan target perubahan sesi berikutnya.",
+      "columns": [
+        {
+          "name": "chapter_progress_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "chapter_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "chapters.chapter_id"
+        },
+        {
+          "name": "current_level_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "levels.level_id"
+        },
+        {
+          "name": "pending_mastery_change_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "mastery_changes.mastery_change_id"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id, chapter_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "FK komposit menjaga current_level_id milik chapter_id dan chapter dalam course_id. Pending change harus milik anak/kursus; jika target beda bab, pemilihan sesi mengarahkan ke progress bab target."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "chapter_id",
+            "course_id"
+          ],
+          "references_table": "chapters",
+          "references_columns": [
+            "chapter_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "current_level_id",
+            "chapter_id"
+          ],
+          "references_table": "levels",
+          "references_columns": [
+            "level_id",
+            "chapter_id"
+          ]
+        },
+        {
+          "columns": [
+            "pending_mastery_change_id",
+            "child_id",
+            "course_id"
+          ],
+          "references_table": "mastery_changes",
+          "references_columns": [
+            "mastery_change_id",
+            "child_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "reward_items",
+      "entity_name": "reward_item",
+      "primary_key": "reward_item_id",
+      "module": "learning",
+      "phase": "S06",
+      "purpose": "Katalog stiker/koleksi yang diterbitkan produk.",
+      "columns": [
+        {
+          "name": "reward_item_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "product_asset_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "product_assets.product_asset_id"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (code)"
+      ],
+      "checks": [],
+      "rules": [],
+      "indexes": []
+    },
+    {
+      "name": "reward_grants",
+      "entity_name": "reward_grant",
+      "primary_key": "reward_grant_id",
+      "module": "learning",
+      "phase": "S06",
+      "purpose": "Pemberian satu item dengan sumber instans atau sesi yang unik.",
+      "columns": [
+        {
+          "name": "reward_grant_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "reward_item_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "reward_items.reward_item_id"
+        },
+        {
+          "name": "attempt_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "attempts.attempt_id"
+        },
+        {
+          "name": "study_session_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "study_sessions.study_session_id"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (child_id, attempt_id, reward_item_id) WHERE attempt_id IS NOT NULL",
+        "UNIQUE (child_id, study_session_id, reward_item_id) WHERE study_session_id IS NOT NULL",
+        "UNIQUE (reward_grant_id, child_id)"
+      ],
+      "checks": [
+        "num_nonnulls(attempt_id, study_session_id) = 1"
+      ],
+      "rules": [
+        "Sumber harus milik anak; pemeriksaan sumber lintas instans/sesi di bawah lock yang sama dengan penyelesaian."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "media_assets",
+      "entity_name": "media_asset",
+      "primary_key": "media_asset_id",
+      "module": "media-reports",
+      "phase": "S09/M3",
+      "purpose": "Media pribadi anak, terpisah dari product_assets.",
+      "columns": [
+        {
+          "name": "media_asset_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "attempt_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "attempts.attempt_id"
+        },
+        {
+          "name": "uploaded_by_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "consent_event_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "consent_events.consent_event_id"
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "provider_asset_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "resource_type",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "delivery_type",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "byte_size",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "duration_ms",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "portfolio_saved_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "variants",
+          "type": "jsonb",
+          "nullable": false,
+          "introduced_in": "M3",
+          "description": "Default []; daftar varian milik media: name, provider_asset_key, transform, status. Tidak mempunyai ID domain/izin terpisah."
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (provider_asset_key)"
+      ],
+      "checks": [
+        "byte_size >= 0",
+        "delivery_type = 'authenticated'",
+        "jsonb_typeof(variants) = 'array'"
+      ],
+      "rules": [
+        "Instans dan grant consent bila ada harus milik anak/keluarga yang sama. Persetujuan lama tidak menggantikan izin efektif terbaru. Provider key bukan URL publik atau API secret.",
+        "Varian adalah daftar terstruktur milik media; nama unik per media divalidasi server. Original dan semua varian tetap authenticated. Update daftar diserialisasi dengan penghapusan di bawah lock media/child; job penghapusan menyimpan seluruh key remote sebelum row dibersihkan."
+      ],
+      "indexes": [
+        "INDEX (child_id, status, created_at)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "observations",
+      "entity_name": "observation",
+      "primary_key": "observation_id",
+      "module": "media-reports",
+      "phase": "M3",
+      "purpose": "Pengamatan rubrik atas suatu attempt, deterministik/manusia/AI.",
+      "columns": [
+        {
+          "name": "observation_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "attempt_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "attempts.attempt_id"
+        },
+        {
+          "name": "rubric_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rubric_versions.rubric_version_id"
+        },
+        {
+          "name": "processing_task_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "processing_tasks.processing_task_id"
+        },
+        {
+          "name": "domain",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "data",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "model_config",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (observation_id, attempt_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "Attempt harus milik child; rubrik/model yang dipakai dicatat. Karya terbuka tidak diubah menjadi skor benar/salah atau diagnosis."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "report_snapshots",
+      "entity_name": "report_snapshot",
+      "primary_key": "report_snapshot_id",
+      "module": "media-reports",
+      "phase": "M3",
+      "purpose": "Snapshot laporan berbukti untuk ekspor/riwayat; ringkasan M1 boleh query langsung.",
+      "columns": [
+        {
+          "name": "report_snapshot_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "report_rule_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rule_versions.rule_version_id"
+        },
+        {
+          "name": "period_started_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "period_ended_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "child_data_version",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "snapshot_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "claims",
+          "type": "jsonb",
+          "nullable": false,
+          "description": "Default []; daftar {key, text, evidence_status}. Key lokal unik per snapshot, tanpa array ID attempt tersembunyi."
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (snapshot_key)",
+        "UNIQUE (report_snapshot_id, child_id, course_id)"
+      ],
+      "checks": [
+        "period_ended_at > period_started_at",
+        "jsonb_typeof(claims) = 'array'"
+      ],
+      "rules": [
+        "Snapshot dibangun dari bukti valid; penghapusan bukti membatalkan snapshot/ekspor terdampak lalu membangun ulang, bukan membiarkan klaim tanpa sumber.",
+        "Bangun snapshot dari satu pembacaan konsisten, misalnya transaksi REPEATABLE READ yang singkat, sambil merekam children.data_version. Finalisasi mengunci child dan hanya menandai ready bila data_version masih sama serta bukti masih sah; snapshot invalidated tidak dipulihkan menjadi ready oleh retry lama. Versi baru membuat snapshot baru.",
+        "Klaim dimiliki snapshot dan tidak mempunyai lifecycle/API edit sendiri. Server memvalidasi key unik serta klaim sufficient memiliki report_evidence yang sah sebelum ready; snapshot siap immutable selain status invalidasi.",
+        "Klaim dan report_evidence ditulis dalam transaksi penyusunan snapshot; key lokal di claims harus unik dan seluruh evidence harus menunjuk key yang ada. Array claims tidak menyimpan UUID attempt/anak/aset sebagai referensi tersembunyi."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "report_evidence",
+      "entity_name": "report_evidence",
+      "primary_key": "report_evidence_id",
+      "module": "media-reports",
+      "phase": "M3",
+      "purpose": "Relasi bukti attempt/pengamatan ke key klaim lokal pada snapshot.",
+      "columns": [
+        {
+          "name": "report_evidence_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "report_snapshot_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "report_snapshots.report_snapshot_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "claim_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "attempt_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "attempts.attempt_id"
+        },
+        {
+          "name": "observation_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "observations.observation_id"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (report_snapshot_id, claim_key, attempt_id)"
+      ],
+      "checks": [],
+      "rules": [
+        "FK komposit memastikan snapshot, attempt, dan pengamatan berada pada anak/kursus/attempt yang sama. claim_key harus ada pada claims snapshot; ini key lokal dokumen yang divalidasi layanan, bukan FK ke entitas klaim terpisah."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "observation_id",
+            "attempt_id"
+          ],
+          "references_table": "observations",
+          "references_columns": [
+            "observation_id",
+            "attempt_id"
+          ]
+        },
+        {
+          "columns": [
+            "report_snapshot_id",
+            "child_id",
+            "course_id"
+          ],
+          "references_table": "report_snapshots",
+          "references_columns": [
+            "report_snapshot_id",
+            "child_id",
+            "course_id"
+          ]
+        },
+        {
+          "columns": [
+            "attempt_id",
+            "child_id",
+            "course_id"
+          ],
+          "references_table": "attempts",
+          "references_columns": [
+            "attempt_id",
+            "child_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "report_exports",
+      "entity_name": "report_export",
+      "primary_key": "report_export_id",
+      "module": "media-reports",
+      "phase": "M3",
+      "purpose": "Permintaan PDF sementara per snapshot dan pengguna.",
+      "columns": [
+        {
+          "name": "report_export_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "report_snapshot_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "report_snapshots.report_snapshot_id"
+        },
+        {
+          "name": "requested_by_user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "include_artwork",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "output_storage_key",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "cancelled_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [],
+      "rules": [
+        "Jika requester caregiver, include_artwork selalu false dan izin ekspor diperlukan. Key output bukan URL publik; worker dan endpoint unduh memeriksa izin terbaru.",
+        "Gotenberg dijalankan tanpa menahan transaksi database. Output belum dapat diunduh selama rendering. Publikasi memakai transaksi singkat: lock child lalu snapshot/ekspor, periksa ulang data_version, izin requester dan status belum dibatalkan; transisi kondisional ke ready hanya bila semua sah. Jika gagal, hapus output sementara dan jangan menghidupkan kembali task cancelled. Endpoint unduh mengulangi pemeriksaan validitas snapshot, izin, expiry dan status ready."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "plan_versions",
+      "entity_name": "plan_version",
+      "primary_key": "plan_version_id",
+      "module": "billing",
+      "phase": "M4",
+      "purpose": "Versi harga, durasi dan fitur paket yang dibekukan.",
+      "columns": [
+        {
+          "name": "plan_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "duration_months",
+          "type": "smallint",
+          "nullable": false
+        },
+        {
+          "name": "price",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "includes_worksheets",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "name": "includes_olympiad",
+          "type": "boolean",
+          "nullable": false
+        },
+        {
+          "name": "effective_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (course_id, code, version)",
+        "UNIQUE (course_id, code) WHERE status = 'active'",
+        "UNIQUE (plan_version_id, course_id)"
+      ],
+      "checks": [
+        "price >= 0",
+        "duration_months IN (1,3,12)",
+        "currency = 'IDR'",
+        "status IN ('draft','active','archived')"
+      ],
+      "rules": [
+        "Harga/fitur yang telah dirujuk order tidak diubah. D7 menetapkan nominal nyata; tidak memakai float untuk rupiah.",
+        "Seri paket dikenali lewat course_id/code; version membekukan penawaran. Checkout baru hanya memakai versi active yang sudah efektif. Mengarsipkan penawaran tidak mengubah hak dari order/segmen lama yang sah. Perubahan harga/fitur/title membuat versi baru; status ketersediaan jual dapat berubah melalui layanan."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "orders",
+      "entity_name": "order",
+      "primary_key": "order_id",
+      "module": "billing",
+      "phase": "M4",
+      "purpose": "Pesanan satu anak/kursus dan satu versi paket.",
+      "columns": [
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "buyer_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "plan_version_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "plan_versions.plan_version_id"
+        },
+        {
+          "name": "reference",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "amount_due",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "currency",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "paid_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (reference)"
+      ],
+      "checks": [
+        "amount_due >= 0",
+        "currency = 'IDR'",
+        "child_id IS NULL OR family_id IS NOT NULL"
+      ],
+      "rules": [
+        "Pembuatan order wajib family/child/buyer non-null dan valid; nullable hanya untuk anonimisasi/hard-delete yang dibenarkan D2/D7 pada catatan terminal.",
+        "Kursus paket, anak keluarga, snapshot harga dan buyer owner diperiksa dalam transaksi. Pesanan pending harus ditutup sebelum target profil dihapus.",
+        "Saat penghapusan profil disahkan, child_id boleh dikosongkan sementara family_id dipertahankan untuk riwayat keluarga. Family_id hanya dikosongkan ketika penghapusan/anonimisasi keluarga disahkan; bukan otomatis saat satu anak dihapus."
+      ],
+      "indexes": [
+        "INDEX (family_id, created_at)"
+      ],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        },
+        {
+          "columns": [
+            "plan_version_id",
+            "course_id"
+          ],
+          "references_table": "plan_versions",
+          "references_columns": [
+            "plan_version_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "payment_transactions",
+      "entity_name": "payment_transaction",
+      "primary_key": "payment_transaction_id",
+      "module": "billing",
+      "phase": "M4",
+      "purpose": "Percobaan transaksi gateway untuk suatu order.",
+      "columns": [
+        {
+          "name": "payment_transaction_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "orders.order_id"
+        },
+        {
+          "name": "provider",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "provider_transaction_id",
+          "type": "text",
+          "nullable": true,
+          "external_identifier": true
+        },
+        {
+          "name": "provider_session_id",
+          "type": "text",
+          "nullable": true,
+          "external_identifier": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "verified_amount",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
+          "name": "verified_currency",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "verified_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (provider, provider_transaction_id) WHERE provider_transaction_id IS NOT NULL"
+      ],
+      "checks": [],
+      "rules": [
+        "Provider ID adalah opaque text eksternal. Beberapa transaksi boleh terkait satu order; aktivasi akses tetap paling banyak satu dari pembayaran order tersebut."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "payment_events",
+      "entity_name": "payment_event",
+      "primary_key": "payment_event_id",
+      "module": "billing",
+      "phase": "M4",
+      "purpose": "Jejak callback/poll/reconciliation dengan data minimum.",
+      "columns": [
+        {
+          "name": "payment_event_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "orders.order_id"
+        },
+        {
+          "name": "payment_transaction_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "payment_transactions.payment_transaction_id"
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "provider_event_key",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "payload_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "signature_valid",
+          "type": "boolean",
+          "nullable": true
+        },
+        {
+          "name": "verification_status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "received_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (provider_event_key) WHERE provider_event_key IS NOT NULL"
+      ],
+      "checks": [],
+      "rules": [
+        "Jika kedua FK terisi, transaction.order_id harus sama. Event gagal cocok tidak membuka akses. Raw callback/secret tidak disimpan tanpa kebutuhan retensi D2."
+      ],
+      "indexes": [
+        "INDEX (order_id, received_at)"
+      ]
+    },
+    {
+      "name": "trial_grants",
+      "entity_name": "trial_grant",
+      "primary_key": "trial_grant_id",
+      "module": "billing",
+      "phase": "M4",
+      "purpose": "Ledger penerima trial yang tidak direset dengan menghapus/mengganti profil.",
+      "columns": [
+        {
+          "name": "trial_grant_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "trial_subject_key",
+          "type": "uuid",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "started_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "ended_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "policy_version",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (trial_subject_key, course_id)",
+        "UNIQUE (child_id, course_id) WHERE child_id IS NOT NULL"
+      ],
+      "checks": [
+        "ended_at > started_at",
+        "child_id IS NULL OR family_id IS NOT NULL"
+      ],
+      "rules": [
+        "trial_subject_key adalah identitas ledger internal, bukan FK tabel yang hilang. Kuota/titik mulai/perpanjangan mengikuti D3; tidak mengunci angka tiga sebelum kebijakan final.",
+        "FK nullable hanya untuk penghapusan/retensi yang disetujui D2. Tidak menyimpan nama anak sebagai snapshot ledger.",
+        "Saat penghapusan profil disahkan, child_id boleh dikosongkan sementara family_id dipertahankan untuk riwayat keluarga. Family_id hanya dikosongkan ketika penghapusan/anonimisasi keluarga disahkan; bukan otomatis saat satu anak dihapus.",
+        "Perhitungan kuota keluarga tetap mencakup ledger dengan child_id NULL. Menghapus atau membuat ulang profil tidak mengembalikan slot trial yang telah dipakai; angka kuota tetap mengikuti D3."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "child_id",
+            "family_id"
+          ],
+          "references_table": "children",
+          "references_columns": [
+            "child_id",
+            "family_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "refund_requests",
+      "entity_name": "refund_request",
+      "primary_key": "refund_request_id",
+      "module": "billing",
+      "phase": "M4",
+      "purpose": "Kasus refund manual melalui dukungan/penyedia sesuai D7.",
+      "columns": [
+        {
+          "name": "refund_request_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "orders.order_id"
+        },
+        {
+          "name": "requested_by_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "requested_amount",
+          "type": "bigint",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": false,
+          "description": "Identifier alasan domain sesuai kontrak endpoint; penamaan singkat tidak mengubah aturan validasi nilainya."
+        },
+        {
+          "name": "provider_refund_reference",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "resolved_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [
+        "requested_amount >= 0"
+      ],
+      "rules": [
+        "Tidak mengimplementasikan kebijakan refund otomatis yang belum disepakati. Total refund terverifikasi tidak boleh melebihi jumlah dibayar; pemeriksaan agregat di bawah lock order."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "access_adjustments",
+      "entity_name": "access_adjustment",
+      "primary_key": "access_adjustment_id",
+      "module": "billing",
+      "phase": "M4",
+      "purpose": "Catatan penyesuaian akses oleh operasional, termasuk akibat refund.",
+      "columns": [
+        {
+          "name": "access_adjustment_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "orders.order_id"
+        },
+        {
+          "name": "refund_request_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "refund_requests.refund_request_id"
+        },
+        {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": false,
+          "description": "Identifier alasan domain sesuai kontrak endpoint; penamaan singkat tidak mengubah aturan validasi nilainya."
+        },
+        {
+          "name": "details",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [],
+      "rules": [
+        "Perubahan periode/status akses diaudit dan diserialisasi. Tidak memalsukan status pembayaran gateway."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "access_segments",
+      "entity_name": "access_segment",
+      "primary_key": "access_segment_id",
+      "module": "billing",
+      "phase": "M4",
+      "purpose": "Hak belajar/fitur pada interval waktu satu anak/kursus.",
+      "columns": [
+        {
+          "name": "access_segment_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "children.child_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "plan_version_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "plan_versions.plan_version_id"
+        },
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "orders.order_id"
+        },
+        {
+          "name": "trial_grant_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "trial_grants.trial_grant_id"
+        },
+        {
+          "name": "access_adjustment_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "access_adjustments.access_adjustment_id"
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "started_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "ended_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (order_id) WHERE order_id IS NOT NULL",
+        "UNIQUE (trial_grant_id) WHERE trial_grant_id IS NOT NULL"
+      ],
+      "checks": [
+        "ended_at > started_at",
+        "num_nonnulls(order_id, trial_grant_id, access_adjustment_id) = 1",
+        "(source = 'purchase' AND order_id IS NOT NULL AND plan_version_id IS NOT NULL) OR (source = 'trial' AND trial_grant_id IS NOT NULL) OR (source = 'adjustment' AND access_adjustment_id IS NOT NULL)"
+      ],
+      "rules": [
+        "Sumber dan anak/kursus harus cocok. Versi paket wajib untuk pembelian, opsional pada trial/manual sesuai policy. Sumber order hanya boleh diaplikasikan sekali setelah verifikasi.",
+        "Periode efektif memakai batas [started_at, ended_at). Cegah interval aktif/terjadwal tumpang tindih per anak/kursus dengan exclusion constraint dan lock; D10 menentukan cara menyusun/mengubah segmen, bukan membiarkan tier efektif ambigu."
+      ],
+      "indexes": [
+        "INDEX (child_id, course_id, status, ended_at)"
+      ]
+    },
+    {
+      "name": "content_generations",
+      "entity_name": "content_generation",
+      "primary_key": "content_generation_id",
+      "module": "operations",
+      "phase": "M3",
+      "purpose": "Spesifikasi draf soal AI tanpa konteks/data anak.",
+      "columns": [
+        {
+          "name": "content_generation_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "requested_by_user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "course_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "courses.course_id"
+        },
+        {
+          "name": "level_skill_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "level_skills.level_skill_id"
+        },
+        {
+          "name": "activity_template_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "activity_templates.activity_template_id"
+        },
+        {
+          "name": "requested_count",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "specification",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "model_config",
+          "type": "jsonb",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [
+        "requested_count > 0"
+      ],
+      "rules": [
+        "Kursus level_skill cocok. Spesifikasi dibatasi schema dan tidak memuat profil/media anak."
+      ],
+      "indexes": [],
+      "composite_foreign_keys": [
+        {
+          "columns": [
+            "level_skill_id",
+            "course_id"
+          ],
+          "references_table": "level_skills",
+          "references_columns": [
+            "level_skill_id",
+            "course_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "processing_tasks",
+      "entity_name": "processing_task",
+      "primary_key": "processing_task_id",
+      "module": "operations",
+      "phase": "M3",
+      "purpose": "Status pekerjaan domain; tidak mengganti tabel queue milik River.",
+      "columns": [
+        {
+          "name": "processing_task_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "content_generation_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "content_generations.content_generation_id"
+        },
+        {
+          "name": "media_asset_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "media_assets.media_asset_id"
+        },
+        {
+          "name": "report_export_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "report_exports.report_export_id"
+        },
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "orders.order_id",
+          "introduced_in": "M4"
+        },
+        {
+          "name": "login_token_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "login_tokens.login_token_id"
+        },
+        {
+          "name": "deletion_request_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "deletion_requests.deletion_request_id",
+          "introduced_in": "M4"
+        },
+        {
+          "name": "family_invitation_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "family_invitations.family_invitation_id"
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "task_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "river_job_id",
+          "type": "bigint",
+          "nullable": true,
+          "external_identifier": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "attempt_count",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "last_error",
+          "type": "text",
+          "nullable": true,
+          "description": "Kode error teknis tersanitasi, tanpa body/token/media."
+        },
+        {
+          "name": "provider_request_key",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "cost",
+          "type": "numeric(20,8)",
+          "nullable": true
+        },
+        {
+          "name": "cost_currency",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "delivery_payload_encrypted",
+          "type": "text",
+          "nullable": true,
+          "description": "Payload email sementara terenkripsi; hanya untuk task login/undangan, dibersihkan setelah pengiriman terminal."
+        },
+        {
+          "name": "payload_expires_at",
+          "type": "timestamptz",
+          "nullable": true,
+          "description": "Batas retry payload email; tidak melampaui expiry token/undangan."
+        },
+        {
+          "name": "finished_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (task_key)"
+      ],
+      "checks": [
+        "attempt_count >= 0",
+        "num_nonnulls(content_generation_id, media_asset_id, report_export_id, order_id, login_token_id, family_invitation_id, deletion_request_id) = 1",
+        "(delivery_payload_encrypted IS NULL) = (payload_expires_at IS NULL)"
+      ],
+      "rules": [
+        "Task kind menentukan FK target tepat satu. River job key adalah korelasi internal SDK, bukan FK agar purge queue tidak merusak riwayat domain.",
+        "Delete/retensi membatalkan atau membersihkan task sebelum target dihapus. Biaya mendukung pecahan mata uang penyedia; order rupiah tetap bigint.",
+        "Payload email terenkripsi hanya diizinkan pada task login_token/family_invitation. Secret tidak ada pada argumen River/log; key enkripsi dikelola terpisah. Retry mengirim payload dan provider_request_key yang sama, lalu membersihkan ciphertext setelah terminal sesuai protokol email."
+      ],
+      "indexes": [
+        "INDEX (status, created_at)"
+      ]
+    },
+    {
+      "name": "idempotency_records",
+      "entity_name": "idempotency_record",
+      "primary_key": "idempotency_record_id",
+      "module": "operations",
+      "phase": "S05",
+      "purpose": "Hasil operasi logis yang dapat dipulihkan tanpa duplikasi efek.",
+      "columns": [
+        {
+          "name": "idempotency_record_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "users.user_id"
+        },
+        {
+          "name": "auth_session_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "auth_sessions.auth_session_id"
+        },
+        {
+          "name": "learning_lease_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "learning_leases.learning_lease_id",
+          "description": "Lease asli operasi belajar; terisi pada submit dan penerbitan cookie agar replay terikat pemilik/generasi yang tepat."
+        },
+        {
+          "name": "operation",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "resource_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "idempotency_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "request_hash",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "http_status",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "response",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (auth_session_id, operation, resource_key, idempotency_key)"
+      ],
+      "checks": [],
+      "rules": [
+        "resource_key adalah kunci scope opaque, bukan FK generik domain. Verifikasi actor/lease/izin sebelum replay; secret lease/cookie tidak dicache. Respons tersimpan mengikuti retensi D2.",
+        "actor_user_id harus sama dengan auth_sessions.user_id; diverifikasi saat transaksi/constraint join.",
+        "Operasi belajar mengisi learning_lease_id dalam transaksi hasil. Recovery cookie hanya untuk lease aktif yang sama dengan record, auth_session pemilik, child, dan generation; bila sudah dipindah lalu kembali, key lama tidak boleh merotasi lease pengganti. Hapus record sesuai TTL sebelum lease yang dirujuk dibersihkan."
+      ],
+      "indexes": [
+        "INDEX (expires_at)"
+      ]
+    },
+    {
+      "name": "audit_events",
+      "entity_name": "audit_event",
+      "primary_key": "audit_event_id",
+      "module": "operations",
+      "phase": "S03",
+      "purpose": "Jejak aksi sensitif dengan payload minimum tersanitasi.",
+      "columns": [
+        {
+          "name": "audit_event_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "family_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "families.family_id"
+        },
+        {
+          "name": "child_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "children.child_id"
+        },
+        {
+          "name": "action",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "target_table",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "target_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": true,
+          "description": "Identifier alasan domain sesuai kontrak endpoint; penamaan singkat tidak mengubah aturan validasi nilainya."
+        },
+        {
+          "name": "metadata",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "occurred_at",
+          "type": "timestamptz",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [],
+      "rules": [
+        "Target table/key adalah referensi historis audit, sengaja bukan FK agar jejak penghapusan bertahan sesuai D2. Tidak dipakai sebagai pengganti relasi bisnis/otorisasi."
+      ],
+      "indexes": [
+        "INDEX (family_id, occurred_at)"
+      ]
+    },
+    {
+      "name": "deletion_requests",
+      "entity_name": "deletion_request",
+      "primary_key": "deletion_request_id",
+      "module": "operations",
+      "phase": "M4",
+      "purpose": "Permintaan penghapusan dengan target historis dan progres.",
+      "columns": [
+        {
+          "name": "deletion_request_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "requested_by_user_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "users.user_id"
+        },
+        {
+          "name": "target_type",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "target_key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "policy_version",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "completed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [],
+      "checks": [],
+      "rules": [
+        "Target historis tidak menjadi FK keras ke objek yang justru akan dihapus. Catatan minimum dan retensinya mengikuti D2."
+      ],
+      "indexes": []
+    },
+    {
+      "name": "deletion_items",
+      "entity_name": "deletion_item",
+      "primary_key": "deletion_item_id",
+      "module": "operations",
+      "phase": "M4",
+      "purpose": "Langkah penghapusan lokal/remote dan bukti retry.",
+      "columns": [
+        {
+          "name": "deletion_item_id",
+          "type": "uuid",
+          "nullable": false,
+          "primary_key": true
+        },
+        {
+          "name": "deletion_request_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "deletion_requests.deletion_request_id"
+        },
+        {
+          "name": "storage_type",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "target_storage_key_encrypted",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "retry_count",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "completed_at",
+          "type": "timestamptz",
+          "nullable": true
+        },
+        {
+          "name": "target_fingerprint",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "nullable": false
+        }
+      ],
+      "unique": [
+        "UNIQUE (deletion_request_id, storage_type, target_fingerprint)"
+      ],
+      "checks": [
+        "retry_count >= 0"
+      ],
+      "rules": [
+        "target_fingerprint adalah hash/HMAC stabil dari identitas objek; enkripsi acak target_storage_key_encrypted tidak dipakai untuk deduplikasi. Simpan kunci remote aman agar retry tetap dapat berjalan setelah baris aplikasi dibersihkan. Retensi dan pembersihan key mengikuti D2."
+      ],
+      "indexes": []
+    }
+  ]
+}

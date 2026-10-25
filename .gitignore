@@ -1,0 +1,4 @@
+.DS_Store
+
+# Materi referensi lokal, disimpan di luar riwayat Git.
+/references/

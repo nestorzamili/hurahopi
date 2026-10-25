@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc"><title id="title">Hurahopi: sketsa beranda anak dan aktivitas</title><desc id="desc">Dua wireframe dunia Hopi dan satu aktivitas memilih tiga apel. Ilustrasi Hopi berupa placeholder. Tidak ada pembelian atau statistik penilaian pada layar anak.</desc><style>text{font-family:Arial,Helvetica,sans-serif;fill:#173F35}.muted{fill:#526C63}.white{fill:#fff}</style><rect width="1600" height="1080" fill="#F6F5EF"/>
+<text x="40" y="52" font-size="16" font-weight="700" style="fill:#126E60">PENGALAMAN UTAMA ANAK</text>
+<text x="40" y="98" font-size="34" font-weight="700" style="fill:#173F35">Masuk ke dunia Hopi, lalu fokus pada satu aktivitas</text>
+<text x="40" y="130" font-size="17" font-weight="400" style="fill:#526C63">Sketsa susunan layar • ilustrasi karakter berupa placeholder • bukan desain visual final</text>
+<rect x="40" y="164" width="740" height="650" rx="24" fill="#FFF8E8" stroke="#FFF8E8" stroke-width="1"/>
+<text x="64" y="198" font-size="13" font-weight="700" style="fill:#526C63">BERANDA ANAK</text>
+<circle cx="91" cy="244" r="25" fill="#DDEEE5" stroke="#DDEEE5"/>
+<text x="81" y="252" font-size="20" font-weight="700" style="fill:#173F35">A</text>
+<text x="129" y="251" font-size="19" font-weight="700" style="fill:#173F35">Alya</text>
+<text x="303" y="253" font-size="26" font-weight="700" style="fill:#126E60">hurahopi</text>
+<rect x="570" y="222" width="181" height="46" rx="13" fill="#FFFFFF" stroke="#DCE4DA" stroke-width="1"/>
+<text x="584" y="251" font-size="16" font-weight="400" style="fill:#173F35">Area orang tua</text>
+<path d="M58 520 Q220 420 390 520 T762 520 L762 720 L58 720 Z" fill="#E4EDCD"/>
+<path d="M58 630 Q230 520 430 640 T762 610 L762 720 L58 720 Z" fill="#D0E3C2"/>
+<circle cx="671" cy="327" r="37" fill="#FFE19A" stroke="#FFE19A"/>
+<rect x="275" y="317" width="274" height="119" rx="23" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1"/>
+<text x="306" y="357" font-size="25" font-weight="700" style="fill:#173F35">Ayo bantu Hopi</text>
+<text x="302" y="392" font-size="25" font-weight="700" style="fill:#173F35">menyiapkan bekal!</text>
+<circle cx="411" cy="510" r="62" fill="#F1D7B1" stroke="#F1D7B1"/>
+<text x="374" y="519" font-size="25" font-weight="700" style="fill:#173F35">HOPI</text>
+<text x="351" y="585" font-size="20" font-weight="700" style="fill:#173F35">Misi hari ini</text>
+<rect x="259" y="611" width="307" height="70" rx="14" fill="#126E60" stroke="#126E60" stroke-width="1"/>
+<text x="277" y="653.0" font-size="18" font-weight="700" style="fill:#FFFFFF">MULAI MISI</text>
+<rect x="83" y="729" width="302" height="58" rx="15" fill="#FFFFFF" stroke="#DCE4DA" stroke-width="1"/>
+<text x="132" y="765" font-size="21" font-weight="700" style="fill:#173F35">Petualanganku</text>
+<rect x="409" y="729" width="302" height="58" rx="15" fill="#FFFFFF" stroke="#DCE4DA" stroke-width="1"/>
+<text x="489" y="765" font-size="21" font-weight="700" style="fill:#173F35">Koleksiku</text>
+<rect x="820" y="164" width="740" height="650" rx="24" fill="#FFFFFF" stroke="#DCE4DA" stroke-width="1"/>
+<text x="844" y="198" font-size="13" font-weight="700" style="fill:#526C63">SAAT AKTIVITAS</text>
+<rect x="844" y="222" width="133" height="46" rx="12" fill="#F5F7F0" stroke="#F5F7F0" stroke-width="1"/>
+<text x="861" y="251" font-size="17" font-weight="700" style="fill:#173F35">Berhenti</text>
+<circle cx="1080" cy="246" r="9" fill="#126E60" stroke="#126E60"/>
+<circle cx="1111" cy="246" r="9" fill="#126E60" stroke="#126E60"/>
+<circle cx="1142" cy="246" r="9" fill="#E2E9DE" stroke="#E2E9DE"/>
+<circle cx="1173" cy="246" r="9" fill="#E2E9DE" stroke="#E2E9DE"/>
+<circle cx="1204" cy="246" r="9" fill="#E2E9DE" stroke="#E2E9DE"/>
+<circle cx="1235" cy="246" r="9" fill="#E2E9DE" stroke="#E2E9DE"/>
+<text x="1009" y="324" font-size="27" font-weight="700" style="fill:#173F35">Pilih piring berisi</text>
+<text x="1098" y="361" font-size="27" font-weight="700" style="fill:#173F35">tiga apel.</text>
+<rect x="1060" y="382" width="252" height="47" rx="13" fill="#FFF8E8" stroke="#FFF8E8" stroke-width="1"/>
+<text x="1104" y="412" font-size="18" font-weight="700" style="fill:#173F35">Dengar lagi</text>
+<rect x="852" y="466" width="208" height="170" rx="18" fill="#FAFBF7" stroke="#DCE4DA" stroke-width="1"/>
+<circle cx="918" cy="552" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="926" cy="530" rx="11" ry="5" fill="#126E60" transform="rotate(-28 926 530)"/>
+<circle cx="992" cy="552" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="1000" cy="530" rx="11" ry="5" fill="#126E60" transform="rotate(-28 1000 530)"/>
+<rect x="1080" y="466" width="208" height="170" rx="18" fill="#E9F5EE" stroke="#126E60" stroke-width="3"/>
+<circle cx="1125" cy="552" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="1133" cy="530" rx="11" ry="5" fill="#126E60" transform="rotate(-28 1133 530)"/>
+<circle cx="1184" cy="552" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="1192" cy="530" rx="11" ry="5" fill="#126E60" transform="rotate(-28 1192 530)"/>
+<circle cx="1243" cy="552" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="1251" cy="530" rx="11" ry="5" fill="#126E60" transform="rotate(-28 1251 530)"/>
+<text x="1138" y="619" font-size="16" font-weight="700" style="fill:#126E60">Dipilih</text>
+<rect x="1308" y="466" width="208" height="170" rx="18" fill="#FAFBF7" stroke="#DCE4DA" stroke-width="1"/>
+<circle cx="1373" cy="531" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="1381" cy="509" rx="11" ry="5" fill="#126E60" transform="rotate(-28 1381 509)"/>
+<circle cx="1451" cy="531" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="1459" cy="509" rx="11" ry="5" fill="#126E60" transform="rotate(-28 1459 509)"/>
+<circle cx="1373" cy="589" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="1381" cy="567" rx="11" ry="5" fill="#126E60" transform="rotate(-28 1381 567)"/>
+<circle cx="1451" cy="589" r="19" fill="#E97965" stroke="#E97965"/>
+<ellipse cx="1459" cy="567" rx="11" ry="5" fill="#126E60" transform="rotate(-28 1459 567)"/>
+<rect x="852" y="703" width="204" height="63" rx="14" fill="#FFF8E8" stroke="#FFF8E8" stroke-width="1"/>
+<text x="870" y="741.5" font-size="18" font-weight="700" style="fill:#173F35">Bantu aku</text>
+<rect x="1103" y="703" width="413" height="63" rx="14" fill="#126E60" stroke="#126E60" stroke-width="1"/>
+<text x="1121" y="741.5" font-size="18" font-weight="700" style="fill:#FFFFFF">Ini jawabanku</text>
+<text x="40" y="871" font-size="25" font-weight="700" style="fill:#173F35">Pendamping menyiapkan sesi; anak menjalankan petualangan</text>
+<text x="40" y="914" font-size="18" font-weight="400" style="fill:#173F35">Beranda: satu tombol besar untuk mulai atau lanjut.</text>
+<text x="40" y="945" font-size="18" font-weight="400" style="fill:#173F35">Peta dan koleksi membantu melihat perjalanan.</text>
+<text x="40" y="976" font-size="18" font-weight="400" style="fill:#173F35">Setelah misi selesai, ajak kembali di lain waktu.</text>
+<text x="820" y="914" font-size="18" font-weight="400" style="fill:#526C63">Aktivitas: satu tujuan, objek jelas, audio dapat diulang.</text>
+<text x="820" y="945" font-size="18" font-weight="400" style="fill:#526C63">Dengar lagi berbeda dari petunjuk Bantu aku.</text>
+<text x="820" y="976" font-size="18" font-weight="400" style="fill:#526C63">Ketuk tetap tersedia; penilaian dilakukan server.</text>
+</svg>
